@@ -1,0 +1,4 @@
+from modelscope.hub.snapshot_download import snapshot_download
+model_dir = snapshot_download('qwen/Qwen-14B-Chat-Int4', 
+                              cache_dir='model', 
+                              revision='master')

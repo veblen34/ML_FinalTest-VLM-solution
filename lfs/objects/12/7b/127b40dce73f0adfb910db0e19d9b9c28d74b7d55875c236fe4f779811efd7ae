@@ -1,0 +1,84 @@
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.generation import GenerationConfig
+import torch
+from torch.utils.data import TensorDataset, DataLoader
+from torchvision.transforms import Resize
+import os
+from torchvision import transforms
+import pandas as pd
+from tqdm import tqdm
+from PIL import Image
+from peft import AutoPeftModelForCausalLM
+import csv 
+def seekans(s):
+    #s = s.lower()
+    s = s if s is not None else '哺乳动物'
+    if '哺乳动物' in s:
+        return 0
+    elif '昆虫和爬行动物' in s:
+        return 1
+    elif '植物和风景' in s:
+        return 2
+    elif '人造物品' in s:
+        return 3
+    else:
+        return 0
+path_to_adapter = '/root/autodl-tmp/Qwen-VL/output_qwen/checkpoint-4000'
+tokenizer = AutoTokenizer.from_pretrained(
+    path_to_adapter, 
+    trust_remote_code=True,
+)
+
+model = AutoPeftModelForCausalLM.from_pretrained(
+    path_to_adapter, # path to the output directory
+    device_map="auto",
+    trust_remote_code=True,
+).eval()
+# 打开CSV文件以写入模式，指定newline=''以避免插入额外的空行
+training_set = torch.load('../data/test.pt')
+to_pil = transforms.ToPILImage()
+
+discription = []
+i = 0
+
+header_list = 'label'
+
+with open('./check_2.csv', 'w', newline='') as f:
+    # 创建CSV写入器对象
+    writer = csv.writer(f)
+    writer.writerow([header_list])
+    
+    cnt = 0
+    dicted={"name":[],"output":[],"label":[]}
+    for x, label in tqdm(training_set[10000:]):
+        filename = f"{i+10000}.jpg"
+        path= '../data/finaltest/' + filename
+       
+        img = Image.open(path)
+        #img.show()
+        
+        query = tokenizer.from_list_format([
+            
+            {'image': path }, # Either a local path or an url
+            {'text':"你是一名图片分类专家。每个图片都属于一个超类，目前有如下超类。类0.哺乳动物，如金鱼,鸟类，婴儿, 熊, 海狸, 男孩, 骆驼, 牛, 黑猩猩, 海豚, 大象, 狐狸, 女孩, 仓鼠, 袋鼠, 豹, 狮子, 男人, 鼠, 水獭, 豪猪, 负鼠, 兔子, 浣熊, 海豹, 臭鼬, 松鼠, 老虎, 鲸鱼, 狼, 女人等。 类1.昆虫和爬行动物，如蜜蜂, 甲虫, 蝴蝶, 毛毛虫, 蟑螂, 蟹, 鳄鱼, 恐龙, 比目鱼, 蜥蜴, 龙虾, 雷, 鲨鱼, 蜗牛, 蛇, 蜘蛛, 鳟鱼, 乌龟, 蠕虫等非哺乳类动物也算在昆虫和爬行动物中 类2.植物和风景，如苹果, 云, 森林, 枫树山, 蘑菇, 橡树橙色, 兰花, 棕榈树梨, 松树，平原, 罂粟, 玫瑰, 海, 向日葵, 甜椒, 郁金香, 柳树等等。类3.人造物品，如杂志，书，眼镜，床, 自行车, 瓶, 碗, 桥, 公共汽车, 罐头, 城堡, 椅子, 时钟, 沙发, 杯, 房子, 键盘, 灯, 割草机, 摩托车, 皮卡车, 板, 路, 火箭, 摩天大楼, 有轨电车, 表格, 坦克, 电话, 电视, 拖拉机, 火车, 衣柜等。若出现没有提到的类别注意合理猜测其类别。图片有多个物品时，图片中最主要的物体起决定性作用，只需回答所属的类。例如：input: '画面中有两个男孩，背景是树林' output:'类0. 哺乳动物和两栖动物' "},
+        ])
+        response, history = model.chat(tokenizer, query=query, history=None)
+        
+        # print(response)
+        #print(seekans(response))
+        #discription.append(response)
+        if(label!=seekans(response)):
+            print(len(dicted["name"]))
+            dicted["name"].append(path)
+            dicted["output"].append(seekans(response))
+            dicted["label"].append(label)
+        else:
+            cnt+=1
+        i += 1
+        writer.writerow([seekans(response)])
+
+
+#df1=pd.DataFrame(dicted)
+#df1.to_csv("output.csv",index=False)
+print(cnt/len(training_set))

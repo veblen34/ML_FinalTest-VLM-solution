@@ -1,0 +1,287 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "c92089af-024f-495d-afce-ae8dc668e772",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import torch\n",
+    "from transformers import AutoModelForCausalLM, AutoTokenizer\n",
+    "from transformers.generation import GenerationConfig\n",
+    "import torch\n",
+    "from torch.utils.data import TensorDataset, DataLoader\n",
+    "from torchvision.transforms import Resize\n",
+    "import os\n",
+    "from torchvision import transforms\n",
+    "import pandas as pd\n",
+    "from tqdm import tqdm\n",
+    "from PIL import Image\n",
+    "from peft import AutoPeftModelForCausalLM\n",
+    "import csv "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "5295fe8a-0bf9-40e4-9cb7-97a0edcd4f0c",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "11980"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# 读取两个CSV文件 finetune_1  check_1 version1\n",
+    "ans = pd.read_csv('version1.csv')\n",
+    "out = pd.read_csv('version_beta.csv')\n",
+    "# test2 = pd.read_csv('ver2.csv')\n",
+    "l = len(out)\n",
+    "l"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "3714f574-44e7-48d4-9c33-65b0764b4ce3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "column_name = 'label'\n",
+    "\n",
+    "min_length = min(len(ans), len(out))\n",
+    "\n",
+    "# min_length = 10000\n",
+    "min_length = 1981"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "43bf0a08-2cce-4e87-af5d-6bccc1aae7b3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ans1 = ans[10000:10000+min_length].reset_index(drop = True)\n",
+    "out1 = out[10000:10000+min_length].reset_index(drop = True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "fa248d2c-4e4d-4911-8925-2b6ed1d74732",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ans1 = ans[10000:10000+min_length].reset_index(drop = True)\n",
+    "out1 = out.head(min_length).reset_index(drop = True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "89153716-ac61-4692-8add-0d829477f3ac",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>label</th>\n",
+       "      <th>id</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>2</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>2</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>0</td>\n",
+       "      <td>2</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>2</td>\n",
+       "      <td>3</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>2</td>\n",
+       "      <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>...</th>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1976</th>\n",
+       "      <td>3</td>\n",
+       "      <td>1976</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1977</th>\n",
+       "      <td>0</td>\n",
+       "      <td>1977</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1978</th>\n",
+       "      <td>0</td>\n",
+       "      <td>1978</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1979</th>\n",
+       "      <td>1</td>\n",
+       "      <td>1979</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1980</th>\n",
+       "      <td>3</td>\n",
+       "      <td>1980</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>1981 rows × 2 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "      label    id\n",
+       "0         2     0\n",
+       "1         2     1\n",
+       "2         0     2\n",
+       "3         2     3\n",
+       "4         2     4\n",
+       "...     ...   ...\n",
+       "1976      3  1976\n",
+       "1977      0  1977\n",
+       "1978      0  1978\n",
+       "1979      1  1979\n",
+       "1980      3  1980\n",
+       "\n",
+       "[1981 rows x 2 columns]"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "ans1 = ans.head(min_length)\n",
+    "out1 = out.head(min_length)\n",
+    "ans1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "a20d40e2-30b2-410b-9d6d-1d63a461cfa9",
+   "metadata": {
+    "collapsed": true,
+    "jupyter": {
+     "outputs_hidden": true
+    }
+   },
+   "outputs": [
+    {
+     "ename": "KeyError",
+     "evalue": "'label'",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mKeyError\u001b[0m                                  Traceback (most recent call last)",
+      "File \u001b[0;32m~/miniconda3/envs/qwen/lib/python3.10/site-packages/pandas/core/indexes/base.py:3805\u001b[0m, in \u001b[0;36mIndex.get_loc\u001b[0;34m(self, key)\u001b[0m\n\u001b[1;32m   3804\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[0;32m-> 3805\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_engine\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mget_loc\u001b[49m\u001b[43m(\u001b[49m\u001b[43mcasted_key\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m   3806\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m \u001b[38;5;167;01mKeyError\u001b[39;00m \u001b[38;5;28;01mas\u001b[39;00m err:\n",
+      "File \u001b[0;32mindex.pyx:167\u001b[0m, in \u001b[0;36mpandas._libs.index.IndexEngine.get_loc\u001b[0;34m()\u001b[0m\n",
+      "File \u001b[0;32mindex.pyx:196\u001b[0m, in \u001b[0;36mpandas._libs.index.IndexEngine.get_loc\u001b[0;34m()\u001b[0m\n",
+      "File \u001b[0;32mpandas/_libs/hashtable_class_helper.pxi:7081\u001b[0m, in \u001b[0;36mpandas._libs.hashtable.PyObjectHashTable.get_item\u001b[0;34m()\u001b[0m\n",
+      "File \u001b[0;32mpandas/_libs/hashtable_class_helper.pxi:7089\u001b[0m, in \u001b[0;36mpandas._libs.hashtable.PyObjectHashTable.get_item\u001b[0;34m()\u001b[0m\n",
+      "\u001b[0;31mKeyError\u001b[0m: 'label'",
+      "\nThe above exception was the direct cause of the following exception:\n",
+      "\u001b[0;31mKeyError\u001b[0m                                  Traceback (most recent call last)",
+      "Cell \u001b[0;32mIn[7], line 8\u001b[0m\n\u001b[1;32m      1\u001b[0m \u001b[38;5;66;03m# 假设要比较的列名相同，并且为'column_name'\u001b[39;00m\n\u001b[1;32m      2\u001b[0m \n\u001b[1;32m      3\u001b[0m \u001b[38;5;66;03m# 截取两个数据框到相同的长度\u001b[39;00m\n\u001b[0;32m   (...)\u001b[0m\n\u001b[1;32m      6\u001b[0m \n\u001b[1;32m      7\u001b[0m \u001b[38;5;66;03m# 检查两个数据框中的特定列的值是否相同\u001b[39;00m\n\u001b[0;32m----> 8\u001b[0m comparison \u001b[38;5;241m=\u001b[39m ans1[column_name] \u001b[38;5;241m==\u001b[39m \u001b[43mout1\u001b[49m\u001b[43m[\u001b[49m\u001b[43mcolumn_name\u001b[49m\u001b[43m]\u001b[49m\n\u001b[1;32m     10\u001b[0m \u001b[38;5;66;03m# 计算值相同的行的比例\u001b[39;00m\n\u001b[1;32m     11\u001b[0m same_values_ratio \u001b[38;5;241m=\u001b[39m comparison\u001b[38;5;241m.\u001b[39mmean()\n",
+      "File \u001b[0;32m~/miniconda3/envs/qwen/lib/python3.10/site-packages/pandas/core/frame.py:4102\u001b[0m, in \u001b[0;36mDataFrame.__getitem__\u001b[0;34m(self, key)\u001b[0m\n\u001b[1;32m   4100\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39mcolumns\u001b[38;5;241m.\u001b[39mnlevels \u001b[38;5;241m>\u001b[39m \u001b[38;5;241m1\u001b[39m:\n\u001b[1;32m   4101\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39m_getitem_multilevel(key)\n\u001b[0;32m-> 4102\u001b[0m indexer \u001b[38;5;241m=\u001b[39m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mcolumns\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mget_loc\u001b[49m\u001b[43m(\u001b[49m\u001b[43mkey\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m   4103\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m is_integer(indexer):\n\u001b[1;32m   4104\u001b[0m     indexer \u001b[38;5;241m=\u001b[39m [indexer]\n",
+      "File \u001b[0;32m~/miniconda3/envs/qwen/lib/python3.10/site-packages/pandas/core/indexes/base.py:3812\u001b[0m, in \u001b[0;36mIndex.get_loc\u001b[0;34m(self, key)\u001b[0m\n\u001b[1;32m   3807\u001b[0m     \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(casted_key, \u001b[38;5;28mslice\u001b[39m) \u001b[38;5;129;01mor\u001b[39;00m (\n\u001b[1;32m   3808\u001b[0m         \u001b[38;5;28misinstance\u001b[39m(casted_key, abc\u001b[38;5;241m.\u001b[39mIterable)\n\u001b[1;32m   3809\u001b[0m         \u001b[38;5;129;01mand\u001b[39;00m \u001b[38;5;28many\u001b[39m(\u001b[38;5;28misinstance\u001b[39m(x, \u001b[38;5;28mslice\u001b[39m) \u001b[38;5;28;01mfor\u001b[39;00m x \u001b[38;5;129;01min\u001b[39;00m casted_key)\n\u001b[1;32m   3810\u001b[0m     ):\n\u001b[1;32m   3811\u001b[0m         \u001b[38;5;28;01mraise\u001b[39;00m InvalidIndexError(key)\n\u001b[0;32m-> 3812\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mKeyError\u001b[39;00m(key) \u001b[38;5;28;01mfrom\u001b[39;00m \u001b[38;5;21;01merr\u001b[39;00m\n\u001b[1;32m   3813\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m \u001b[38;5;167;01mTypeError\u001b[39;00m:\n\u001b[1;32m   3814\u001b[0m     \u001b[38;5;66;03m# If we have a listlike key, _check_indexing_error will raise\u001b[39;00m\n\u001b[1;32m   3815\u001b[0m     \u001b[38;5;66;03m#  InvalidIndexError. Otherwise we fall through and re-raise\u001b[39;00m\n\u001b[1;32m   3816\u001b[0m     \u001b[38;5;66;03m#  the TypeError.\u001b[39;00m\n\u001b[1;32m   3817\u001b[0m     \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39m_check_indexing_error(key)\n",
+      "\u001b[0;31mKeyError\u001b[0m: 'label'"
+     ]
+    }
+   ],
+   "source": [
+    "# 假设要比较的列名相同，并且为'column_name'\n",
+    "\n",
+    "# 截取两个数据框到相同的长度\n",
+    "\n",
+    "\n",
+    "\n",
+    "# 检查两个数据框中的特定列的值是否相同\n",
+    "comparison = ans1[column_name] == out1[column_name]\n",
+    "\n",
+    "# 计算值相同的行的比例\n",
+    "same_values_ratio = comparison.mean()\n",
+    "\n",
+    "print(f\"相同值的行的比例: {same_values_ratio:.2%}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cc2642c5-c899-41c7-9acc-93b52bc426ea",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "qwen",
+   "language": "python",
+   "name": "qwen"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.8"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
